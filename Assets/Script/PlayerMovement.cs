@@ -10,6 +10,8 @@ public class PlayerMovement : MonoBehaviour
     public float runSpeed = 8f;
     public float jumpForce = 10f;
 
+    public CoinManager cm; // <- pastikan ini sudah diisi di Inspector
+
     private Rigidbody2D rb;
     private Animator anim;
     private SpriteRenderer sprite;
@@ -151,6 +153,16 @@ public class PlayerMovement : MonoBehaviour
         else
         {
             Debug.LogWarning("BulletPrefab atau FirePoint belum di-assign di Inspector!");
+        }
+    }
+
+    // ?? Fungsi Trigger Coin
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.gameObject.CompareTag("Coin"))
+        {
+            Destroy(other.gameObject);
+            cm.coinCount++;
         }
     }
 
