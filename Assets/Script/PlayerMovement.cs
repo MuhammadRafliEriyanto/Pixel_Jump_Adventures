@@ -32,10 +32,17 @@ public class PlayerMovement : MonoBehaviour
     public Transform firePoint;      // Assign fire point di Inspector (posisi spawn peluru)
     public float bulletSpeed = 10f;  // Kecepatan peluru
 
+    [Header("Pause UI")]
+    // Ganti pauseMenuUI (full screen) dengan pauseSnackbar (panel kecil)
+    public RectTransform pauseSnackbar; // Assign panel snackbar di Inspector
+
+    private bool isPaused = false;
+
     private enum MovementState { idle, run, jump, shoot, defeat }
 
-    // === Tambahan untuk mobile input ===
     private float mobileInputX = 0f;
+
+    private Coroutine snackbarCoroutine;
 
     private void Awake()
     {
@@ -46,6 +53,14 @@ public class PlayerMovement : MonoBehaviour
         playerController = new PlayerController();
 
         originalScale = transform.localScale;
+
+        // Pastikan snackbar awalnya tersembunyi dan di posisi hidden
+        if (pauseSnackbar != null)
+        {
+            pauseSnackbar.gameObject.SetActive(false);
+            // Posisi di bawah layar, misal
+            pauseSnackbar.anchoredPosition = new Vector2(pauseSnackbar.anchoredPosition.x, -pauseSnackbar.rect.height);
+        }
     }
 
     private void OnEnable()
@@ -66,13 +81,11 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // === Tambahan untuk gabungkan input keyboard dan mobile ===
         float combinedInputX = Mathf.Abs(moveInput.x) > 0 ? moveInput.x : mobileInputX;
 
         Vector2 targetVelocity = new Vector2(combinedInputX * moveSpeed, rb.velocity.y);
         rb.velocity = targetVelocity;
 
-        // Flip sprite dengan aman tanpa ubah ukuran
         float direction = combinedInputX;
 
         if (direction != 0)
@@ -156,7 +169,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // ?? Fungsi Trigger Coin
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (other.gameObject.CompareTag("Coin"))
@@ -173,7 +185,6 @@ public class PlayerMovement : MonoBehaviour
         isShooting = false;
     }
 
-    // === Fungsi tambahan untuk kontrol tombol mobile ===
     public void MoveRight(bool isPressed)
     {
         if (isPressed)
@@ -197,4 +208,90 @@ public class PlayerMovement : MonoBehaviour
             Jump();
         }
     }
+
+    public void MobileShoot()
+    {
+        Shoot();
+    }
+
+    public void OnPauseButtonPressed()
+    {
+        TogglePause();
+    }
+
+    public void TogglePause()
+    {
+        if (isPaused)
+        {
+            ResumeGame();
+        }
+        else
+        {
+            PauseGame();
+        }
+    }
+
+    // 1. Tambah debug di PauseGame dan SlideSnackbar
+    public void ResumeGame()
+    {
+        Debug.Log("ResumeGame called");
+        Time.timeScale = 1f;
+        if (snackbarCoroutine != null) StopCoroutine(snackbarCoroutine);
+        if (pauseSnackbar != null)
+            snackbarCoroutine = StartCoroutine(SlideSnackbar(false));
+        isPaused = false;
+    }
+
+    public void PauseGame()
+    {
+        Debug.Log("PauseGame called");
+        Time.timeScale = 0f;
+        if (snackbarCoroutine != null) StopCoroutine(snackbarCoroutine);
+        if (pauseSnackbar != null)
+            snackbarCoroutine = StartCoroutine(SlideSnackbar(true));
+        isPaused = true;
+    }
+
+    private IEnumerator SlideSnackbar(bool show)
+    {
+        Debug.Log("Starting SlideSnackbar coroutine with show = " + show);
+        float duration = 0.3f;
+        // Kalau pauseSnackbar.rect.height = 0 (sering terjadi kalau UI belum siap), ganti dengan nilai tetap, misal -200
+        float hiddenY = pauseSnackbar.rect.height > 0 ? -pauseSnackbar.rect.height : -200f;
+
+        Vector2 hiddenPos = new Vector2(pauseSnackbar.anchoredPosition.x, hiddenY);
+        Vector2 visiblePos = new Vector2(pauseSnackbar.anchoredPosition.x, 20f);
+
+        Vector2 startPos = show ? hiddenPos : visiblePos;
+        Vector2 endPos = show ? visiblePos : hiddenPos;
+
+        float elapsed = 0f;
+
+        if (show)
+        {
+            Debug.Log("Activating snackbar");
+            pauseSnackbar.gameObject.SetActive(true);
+        }
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            pauseSnackbar.anchoredPosition = Vector2.Lerp(startPos, endPos, elapsed / duration);
+            yield return null;
+        }
+
+        pauseSnackbar.anchoredPosition = endPos;
+
+        if (!show)
+        {
+            pauseSnackbar.gameObject.SetActive(false);
+        }
+    }
+
+    // 2. Tambah method Resume dari snackbar button
+    public void OnResumeButtonPressed()
+    {
+        ResumeGame();
+    }
+
 }
