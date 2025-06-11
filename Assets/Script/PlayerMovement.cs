@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using TMPro;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -44,6 +45,17 @@ public class PlayerMovement : MonoBehaviour
 
     private Coroutine snackbarCoroutine;
 
+    [Header("Health System")]
+    public int maxHealth = 100;
+    private int currentHealth;
+    public TextMeshProUGUI healthText;
+
+    [Header("Knockback Settings")]
+    [SerializeField] private float knockBackTime = 0.2f;
+    [SerializeField] private float knockBackThrust = 10f;
+
+    private bool isKnockedBack = false;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -61,6 +73,9 @@ public class PlayerMovement : MonoBehaviour
             // Posisi di bawah layar, misal
             pauseSnackbar.anchoredPosition = new Vector2(pauseSnackbar.anchoredPosition.x, -pauseSnackbar.rect.height);
         }
+
+        currentHealth = maxHealth;
+        UpdateHealthUI();
     }
 
     private void OnEnable()
@@ -81,6 +96,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (isKnockedBack) return;
+
         float combinedInputX = Mathf.Abs(moveInput.x) > 0 ? moveInput.x : mobileInputX;
 
         Vector2 targetVelocity = new Vector2(combinedInputX * moveSpeed, rb.velocity.y);
@@ -106,6 +123,42 @@ public class PlayerMovement : MonoBehaviour
         }
 
         UpdateAnimation();
+    }
+
+    public void TakeDamage(int damage, Vector2 direction)
+    {
+        if (isKnockedBack) return; // Jangan stack knockback
+
+        currentHealth -= damage;
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            Debug.Log("Player Mati");
+            // Bisa tambahkan logic mati di sini kalau perlu
+        }
+
+        StartCoroutine(HandleKnockback(direction.normalized));
+        UpdateHealthUI();
+    }
+
+    private void UpdateHealthUI()
+    {
+        if (healthText != null)
+            healthText.text = "Health: " + currentHealth;
+    }
+
+    private IEnumerator HandleKnockback(Vector2 direction)
+    {
+        isKnockedBack = true;
+        rb.velocity = Vector2.zero;
+
+        Vector2 force = direction * knockBackThrust * rb.mass;
+        rb.AddForce(force, ForceMode2D.Impulse);
+
+        yield return new WaitForSeconds(knockBackTime);
+
+        rb.velocity = Vector2.zero;
+        isKnockedBack = false;
     }
 
     private void UpdateAnimation()
@@ -151,21 +204,46 @@ public class PlayerMovement : MonoBehaviour
 
         Debug.Log("Tembak!");
 
-        if (bulletPrefab != null && firePoint != null)
+        // Arah tembak (kanan/kiri) dari scale player
+        // Arah tembak berdasarkan arah pergerakan player
+        float directionX = moveInput.x != 0 ? moveInput.x : mobileInputX;
+
+        // Jika tidak bergerak, gunakan arah menghadap (localScale)
+        if (directionX == 0)
+            directionX = Mathf.Sign(transform.localScale.x);
+
+        Vector2 shootDirection = new Vector2(Mathf.Sign(directionX), 0f);
+
+        // Spawn peluru di posisi firePoint
+        GameObject bullet = Instantiate(bulletPrefab, firePoint.position, Quaternion.identity);
+
+        // Ambil Rigidbody2D peluru dan set velocity ke arah tembak
+        Rigidbody2D rbBullet = bullet.GetComponent<Rigidbody2D>();
+        if (rbBullet != null)
         {
-            GameObject bullet = Instantiate(bulletPrefab, firePoint.position, Quaternion.identity);
-
-            Rigidbody2D rbBullet = bullet.GetComponent<Rigidbody2D>();
-
-            if (rbBullet != null)
-            {
-                float direction = Mathf.Sign(transform.localScale.x);
-                rbBullet.velocity = new Vector2(bulletSpeed * direction, 0f);
-            }
+            rbBullet.velocity = shootDirection * bulletSpeed;
         }
         else
         {
-            Debug.LogWarning("BulletPrefab atau FirePoint belum di-assign di Inspector!");
+            Debug.LogWarning("bulletPrefab tidak punya Rigidbody2D!");
+        }
+
+        // Kalau kamu masih mau pakai raycast untuk langsung cek kena musuh tanpa peluru fisik, bisa tetap pakai ini:
+        float rayDistance = 10f; // jarak maksimal raycast
+
+        RaycastHit2D hit = Physics2D.Raycast(firePoint.position, shootDirection, rayDistance, LayerMask.GetMask("Enemy", "Obstacle"));
+
+        Debug.DrawRay(firePoint.position, shootDirection * rayDistance, Color.red, 1f);
+
+        if (hit.collider != null)
+        {
+            Debug.Log("Tembak mengenai: " + hit.collider.name);
+
+            var enemy = hit.collider.GetComponent<Musuh>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage(1);
+            }
         }
     }
 
@@ -231,7 +309,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // 1. Tambah debug di PauseGame dan SlideSnackbar
     public void ResumeGame()
     {
         Debug.Log("ResumeGame called");
@@ -288,10 +365,9 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // 2. Tambah method Resume dari snackbar button
+    // Tambah method Resume dari snackbar button
     public void OnResumeButtonPressed()
     {
         ResumeGame();
     }
-
 }
