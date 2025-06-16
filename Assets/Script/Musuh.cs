@@ -1,25 +1,46 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Musuh : MonoBehaviour
 {
-    public int health = 100;
+    public int maxHealth = 100;
+    private int currentHealth;
 
-    // Fungsi untuk menerima damage dari player
+    public Image healthBarFill; // drag komponen Image (Fill) ke sini dari Inspector
+
+    private void Start()
+    {
+        currentHealth = maxHealth;
+        UpdateHealthBar();
+    }
+
     public void TakeDamage(int damage)
     {
-        health -= damage;
-        Debug.Log("Enemy took " + damage + " damage. Remaining health: " + health);
+        currentHealth -= damage;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
-        if (health <= 0)
+        Debug.Log("Musuh terkena: " + damage + " HP sisa: " + currentHealth);
+
+        UpdateHealthBar();
+
+        if (currentHealth <= 0)
         {
             Die();
         }
     }
 
-    // Fungsi ketika musuh mati
+    private void UpdateHealthBar()
+    {
+        if (healthBarFill != null)
+        {
+            float fillAmount = (float)currentHealth / maxHealth;
+            healthBarFill.fillAmount = fillAmount;
+        }
+    }
+
     private void Die()
     {
-        Debug.Log("Enemy died.");
-        Destroy(gameObject); // Hapus musuh dari scene
+        Debug.Log("Musuh mati.");
+        Destroy(gameObject);
     }
 }

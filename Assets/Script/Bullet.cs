@@ -4,63 +4,55 @@ using UnityEngine;
 public class Bullet : MonoBehaviour
 {
     public float speed = 5f;
-    public int maxHits = 1; // Berapa musuh bisa kena sebelum peluru hancur
-    public float destroyDelay = 0.5f; // Delay sebelum peluru hancur setelah kena musuh
+    public float destroyDelay = 0.05f;
 
-    private int hitCount = 0;
     private Rigidbody2D rb;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        rb.velocity = transform.right * speed; // Atau sesuai arah spawn peluru
+        rb.velocity = transform.right * speed;
+
+        // Deteksi benturan lebih presisi
+        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        Debug.Log("Peluru bertabrakan dengan: " + collision.gameObject.name);
+        Debug.Log("Peluru trigger dengan: " + other.gameObject.name);
 
-        if (collision.gameObject.CompareTag("Enemy"))
+        if (other.CompareTag("Enemy"))
         {
-            Musuh enemy = collision.gameObject.GetComponent<Musuh>();
+            Musuh enemy = other.GetComponent<Musuh>();
+
             if (enemy != null)
             {
-                enemy.TakeDamage(25);
-                Debug.Log("Musuh terkena peluru. HP dikurangi.");
-                Destroy(gameObject);
+                int damageAmount = 25;
+                enemy.TakeDamage(damageAmount);
+                Debug.Log("Musuh terkena peluru dan menerima damage: " + damageAmount);
             }
             else
             {
-                Debug.LogWarning("Tag 'Enemy' ditemukan, tapi script Musuh tidak ada di objek!");
+                Debug.LogWarning("Tag Enemy terdeteksi tapi tidak ditemukan komponen Musuh.");
             }
 
-            hitCount++;
-            Debug.Log("Hit count peluru: " + hitCount);
-
-            if (hitCount >= maxHits)
-            {
-                Debug.Log("Peluru mencapai batas hit. Menghentikan peluru dan menghancurkannya.");
-                rb.velocity = Vector2.zero;
-                rb.simulated = false;
-                GetComponent<Collider2D>().enabled = false;
-                StartCoroutine(DestroyAfterDelay());
-            }
+            StartCoroutine(DestroyAfterDelay());
         }
-        else if (collision.gameObject.CompareTag("Obstacle"))
+        else if (other.CompareTag("Enemy"))
         {
-            Debug.Log("Peluru menabrak obstacle. Dihancurkan.");
-            Destroy(gameObject);
-        }
-        else
-        {
-            Debug.Log("Peluru menabrak objek lain: " + collision.gameObject.tag);
+            Debug.Log("Peluru menabrak obstacle.");
+            StartCoroutine(DestroyAfterDelay());
         }
     }
 
-
-
     private IEnumerator DestroyAfterDelay()
     {
+        rb.velocity = Vector2.zero;
+
+        // Cegah tabrakan ganda
+        var collider = GetComponent<Collider2D>();
+        if (collider != null) collider.enabled = false;
+
         yield return new WaitForSeconds(destroyDelay);
         Destroy(gameObject);
     }
