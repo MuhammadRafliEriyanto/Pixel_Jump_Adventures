@@ -3,26 +3,34 @@ using UnityEngine.SceneManagement;
 
 public class GameStartUI : MonoBehaviour
 {
-    public GameObject gameStartPanel;      // Panel pemberitahuan
-    public GameObject playerController;    // Referensi ke Player
+    public GameObject gameStartPanel;
+    public GameObject playerController;
 
     private void Start()
     {
-        // Saat mulai, tampilkan panel dan nonaktifkan player
-        gameStartPanel.SetActive(true);
-        playerController.SetActive(false);
+        if (PlayerPrefs.GetInt("SkipStartPanel", 0) == 1)
+        {
+            // Mati sebelumnya, langsung main tanpa panel
+            gameStartPanel.SetActive(false);
+            playerController.SetActive(true);
+            PlayerPrefs.SetInt("SkipStartPanel", 0); // Reset
+        }
+        else
+        {
+            // Pertama kali main, tampilkan panel
+            gameStartPanel.SetActive(true);
+            playerController.SetActive(false);
+        }
     }
 
-    // Dipanggil oleh tombol "Play"
     public void OnPlayButtonClicked()
     {
-        gameStartPanel.SetActive(false);         // Sembunyikan panel
-        playerController.SetActive(true);        // Aktifkan player
+        gameStartPanel.SetActive(false);
+        playerController.SetActive(true);
     }
 
-    // Dipanggil oleh tombol "Main Menu"
     public void OnQuitButtonClicked()
     {
-        SceneManager.LoadScene("MainMenu");      // Ganti sesuai nama scene Main Menu
+        SceneManager.LoadScene("MainMenu");
     }
 }

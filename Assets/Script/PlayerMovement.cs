@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
+using UnityEngine.SceneManagement;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -11,7 +12,7 @@ public class PlayerMovement : MonoBehaviour
     public float runSpeed = 8f;
     public float jumpForce = 10f;
 
-    public CoinManager cm; // <- pastikan ini sudah diisi di Inspector
+    public CoinManager cm;
 
     private Rigidbody2D rb;
     private Animator anim;
@@ -29,13 +30,12 @@ public class PlayerMovement : MonoBehaviour
     private Vector3 originalScale;
 
     [Header("Shooting Settings")]
-    public GameObject bulletPrefab;  // Assign prefab peluru di Inspector
-    public Transform firePoint;      // Assign fire point di Inspector (posisi spawn peluru)
-    public float bulletSpeed = 10f;  // Kecepatan peluru
+    public GameObject bulletPrefab;
+    public Transform firePoint;
+    public float bulletSpeed = 10f;
 
     [Header("Pause UI")]
-    // Ganti pauseMenuUI (full screen) dengan pauseSnackbar (panel kecil)
-    public RectTransform pauseSnackbar; // Assign panel snackbar di Inspector
+    public RectTransform pauseSnackbar;
 
     private bool isPaused = false;
 
@@ -56,6 +56,9 @@ public class PlayerMovement : MonoBehaviour
 
     private bool isKnockedBack = false;
 
+    [Header("Fall Detection")]
+    public float fallThresholdY = -10f;  // posisi Y jatuh (bisa diubah via Inspector)
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -66,11 +69,9 @@ public class PlayerMovement : MonoBehaviour
 
         originalScale = transform.localScale;
 
-        // Pastikan snackbar awalnya tersembunyi dan di posisi hidden
         if (pauseSnackbar != null)
         {
             pauseSnackbar.gameObject.SetActive(false);
-            // Posisi di bawah layar, misal
             pauseSnackbar.anchoredPosition = new Vector2(pauseSnackbar.anchoredPosition.x, -pauseSnackbar.rect.height);
         }
 
@@ -81,10 +82,8 @@ public class PlayerMovement : MonoBehaviour
     private void OnEnable()
     {
         playerController.Enable();
-
         playerController.Movement.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
         playerController.Movement.Move.canceled += ctx => moveInput = Vector2.zero;
-
         playerController.Movement.Jump.performed += ctx => Jump();
         playerController.Movement.Shoot.performed += ctx => Shoot();
     }
@@ -94,12 +93,20 @@ public class PlayerMovement : MonoBehaviour
         playerController.Disable();
     }
 
+    private void Update()
+    {
+        // DETEKSI PLAYER JATUH
+        if (transform.position.y < fallThresholdY)
+        {
+            RestartLevel();
+        }
+    }
+
     private void FixedUpdate()
     {
         if (isKnockedBack) return;
 
         float combinedInputX = Mathf.Abs(moveInput.x) > 0 ? moveInput.x : mobileInputX;
-
         Vector2 targetVelocity = new Vector2(combinedInputX * moveSpeed, rb.velocity.y);
         rb.velocity = targetVelocity;
 
@@ -127,14 +134,13 @@ public class PlayerMovement : MonoBehaviour
 
     public void TakeDamage(int damage, Vector2 direction)
     {
-        if (isKnockedBack) return; // Jangan stack knockback
+        if (isKnockedBack) return;
 
         currentHealth -= damage;
         if (currentHealth <= 0)
         {
             currentHealth = 0;
             Debug.Log("Player Mati");
-            // Bisa tambahkan logic mati di sini kalau perlu
         }
 
         StartCoroutine(HandleKnockback(direction.normalized));
@@ -202,43 +208,27 @@ public class PlayerMovement : MonoBehaviour
     {
         StartCoroutine(ShootAnimation());
 
-        Debug.Log("Tembak!");
-
-        // Arah tembak (kanan/kiri) dari scale player
-        // Arah tembak berdasarkan arah pergerakan player
         float directionX = moveInput.x != 0 ? moveInput.x : mobileInputX;
-
-        // Jika tidak bergerak, gunakan arah menghadap (localScale)
         if (directionX == 0)
             directionX = Mathf.Sign(transform.localScale.x);
 
         Vector2 shootDirection = new Vector2(Mathf.Sign(directionX), 0f);
 
-        // Spawn peluru di posisi firePoint
         GameObject bullet = Instantiate(bulletPrefab, firePoint.position, Quaternion.identity);
 
-        // Ambil Rigidbody2D peluru dan set velocity ke arah tembak
         Rigidbody2D rbBullet = bullet.GetComponent<Rigidbody2D>();
         if (rbBullet != null)
         {
             rbBullet.velocity = shootDirection * bulletSpeed;
         }
-        else
-        {
-            Debug.LogWarning("bulletPrefab tidak punya Rigidbody2D!");
-        }
 
-        // Kalau kamu masih mau pakai raycast untuk langsung cek kena musuh tanpa peluru fisik, bisa tetap pakai ini:
-        float rayDistance = 10f; // jarak maksimal raycast
-
+        float rayDistance = 10f;
         RaycastHit2D hit = Physics2D.Raycast(firePoint.position, shootDirection, rayDistance, LayerMask.GetMask("Enemy", "Obstacle"));
 
         Debug.DrawRay(firePoint.position, shootDirection * rayDistance, Color.red, 1f);
 
         if (hit.collider != null)
         {
-            Debug.Log("Tembak mengenai: " + hit.collider.name);
-
             var enemy = hit.collider.GetComponent<Musuh>();
             if (enemy != null)
             {
@@ -311,7 +301,6 @@ public class PlayerMovement : MonoBehaviour
 
     public void ResumeGame()
     {
-        Debug.Log("ResumeGame called");
         Time.timeScale = 1f;
         if (snackbarCoroutine != null) StopCoroutine(snackbarCoroutine);
         if (pauseSnackbar != null)
@@ -321,7 +310,6 @@ public class PlayerMovement : MonoBehaviour
 
     public void PauseGame()
     {
-        Debug.Log("PauseGame called");
         Time.timeScale = 0f;
         if (snackbarCoroutine != null) StopCoroutine(snackbarCoroutine);
         if (pauseSnackbar != null)
@@ -331,9 +319,7 @@ public class PlayerMovement : MonoBehaviour
 
     private IEnumerator SlideSnackbar(bool show)
     {
-        Debug.Log("Starting SlideSnackbar coroutine with show = " + show);
         float duration = 0.3f;
-        // Kalau pauseSnackbar.rect.height = 0 (sering terjadi kalau UI belum siap), ganti dengan nilai tetap, misal -200
         float hiddenY = pauseSnackbar.rect.height > 0 ? -pauseSnackbar.rect.height : -200f;
 
         Vector2 hiddenPos = new Vector2(pauseSnackbar.anchoredPosition.x, hiddenY);
@@ -345,10 +331,7 @@ public class PlayerMovement : MonoBehaviour
         float elapsed = 0f;
 
         if (show)
-        {
-            Debug.Log("Activating snackbar");
             pauseSnackbar.gameObject.SetActive(true);
-        }
 
         while (elapsed < duration)
         {
@@ -360,14 +343,18 @@ public class PlayerMovement : MonoBehaviour
         pauseSnackbar.anchoredPosition = endPos;
 
         if (!show)
-        {
             pauseSnackbar.gameObject.SetActive(false);
-        }
     }
 
-    // Tambah method Resume dari snackbar button
     public void OnResumeButtonPressed()
     {
         ResumeGame();
+    }
+
+    // RESTART LEVEL SAAT JATUH
+    private void RestartLevel()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }
