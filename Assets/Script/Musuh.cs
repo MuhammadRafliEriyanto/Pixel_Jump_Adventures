@@ -6,11 +6,14 @@ public class Musuh : MonoBehaviour
     public int maxHealth = 100;
     private int currentHealth;
 
-    public Image healthBarFill; // drag komponen Image (Fill) ke sini dari Inspector
+    public Image healthBarFill;
+
+    private EnemyShooter shooter;
 
     private void Start()
     {
         currentHealth = maxHealth;
+        shooter = GetComponent<EnemyShooter>();
         UpdateHealthBar();
     }
 
@@ -41,6 +44,10 @@ public class Musuh : MonoBehaviour
     private void Die()
     {
         Debug.Log("Musuh mati.");
+        // Matikan penembakan lebih dulu
+        if (shooter != null) shooter.enabled = false;
+
+        // Hancurkan musuh
         Destroy(gameObject);
     }
 }

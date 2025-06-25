@@ -57,7 +57,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isKnockedBack = false;
 
     [Header("Fall Detection")]
-    public float fallThresholdY = -10f;  // posisi Y jatuh (bisa diubah via Inspector)
+    public float fallThresholdY = -10f;
 
     private void Awake()
     {
@@ -95,7 +95,6 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
-        // DETEKSI PLAYER JATUH
         if (transform.position.y < fallThresholdY)
         {
             RestartLevel();
@@ -137,14 +136,23 @@ public class PlayerMovement : MonoBehaviour
         if (isKnockedBack) return;
 
         currentHealth -= damage;
+        UpdateHealthUI();
+
         if (currentHealth <= 0)
         {
             currentHealth = 0;
             Debug.Log("Player Mati");
+
+            if (anim != null)
+            {
+                anim.SetInteger("state", (int)MovementState.defeat);
+            }
+
+            StartCoroutine(Die());
+            return;
         }
 
         StartCoroutine(HandleKnockback(direction.normalized));
-        UpdateHealthUI();
     }
 
     private void UpdateHealthUI()
@@ -167,8 +175,22 @@ public class PlayerMovement : MonoBehaviour
         isKnockedBack = false;
     }
 
+    private IEnumerator Die()
+    {
+        isKnockedBack = true;
+        rb.velocity = Vector2.zero;
+        yield return new WaitForSeconds(1.2f);
+        RestartLevel();
+    }
+
     private void UpdateAnimation()
     {
+        if (currentHealth <= 0)
+        {
+            anim.SetInteger("state", (int)MovementState.defeat);
+            return;
+        }
+
         MovementState state;
 
         if (isShooting)
@@ -351,7 +373,6 @@ public class PlayerMovement : MonoBehaviour
         ResumeGame();
     }
 
-    // RESTART LEVEL SAAT JATUH
     private void RestartLevel()
     {
         Time.timeScale = 1f;
